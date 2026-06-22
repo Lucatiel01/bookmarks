@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray, desc } from "drizzle-orm";
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { bookmarks, tags, bookmarkTags } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { scrapeOg } from "@/lib/og-scraper";
@@ -14,18 +14,15 @@ export async function addBookmark(url: string, tagNames?: string[]) {
 
   const og = await scrapeOg(url);
 
-  const inserted = await db
-    .insert(bookmarks)
-    .values({
-      userId: user.id,
-      url,
-      title: og.title,
-      description: og.description,
-      image: og.image,
-      favicon: og.favicon,
-      readingTime: estimateReadingTime(`${og.title ?? ""} ${og.description ?? ""}`),
-    })
-    .returning({ id: bookmarks.id });
+  const inserted = await getDb().insert(bookmarks).values({
+    userId: user.id,
+    url,
+    title: og.title,
+    description: og.description,
+    image: og.image,
+    favicon: og.favicon,
+    readingTime: estimateReadingTime(`${og.title ?? ""} ${og.description ?? ""}`),
+  }).returning({ id: bookmarks.id });
 
   const bookmarkId = inserted[0]?.id;
   if (!bookmarkId) throw new Error("Failed to create bookmark");
@@ -34,13 +31,13 @@ export async function addBookmark(url: string, tagNames?: string[]) {
     for (const name of tagNames) {
       const trimmed = name.trim().toLowerCase();
       if (!trimmed) continue;
-      const existing = await db.select().from(tags).where(eq(tags.name, trimmed));
+      const existing = await getDb().select().from(tags).where(eq(tags.name, trimmed));
       let tag = existing[0];
       if (!tag) {
-        const insertedTag = await db.insert(tags).values({ name: trimmed }).returning({ id: tags.id, name: tags.name });
+        const insertedTag = await getDb().insert(tags).values({ name: trimmed }).returning({ id: tags.id, name: tags.name });
         tag = insertedTag[0];
       }
-      await db.insert(bookmarkTags).values({ bookmarkId, tagId: tag.id });
+      await getDb().insert(bookmarkTags).values({ bookmarkId, tagId: tag.id });
     }
   }
 
@@ -52,17 +49,13 @@ export async function toggleArchive(bookmarkId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  const rows = await db
-    .select()
-    .from(bookmarks)
+  const rows = await getDb().select().from(bookmarks)
     .where(and(eq(bookmarks.id, bookmarkId), eq(bookmarks.userId, user.id)));
 
   const bookmark = rows[0];
   if (!bookmark) throw new Error("Not found");
 
-  await db
-    .update(bookmarks)
-    .set({ archived: !bookmark.archived })
+  await getDb().update(bookmarks).set({ archived: !bookmark.archived })
     .where(eq(bookmarks.id, bookmarkId));
 
   revalidatePath("/");
@@ -73,13 +66,9 @@ export async function deleteBookmark(bookmarkId: number) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  await db
-    .delete(bookmarkTags)
-    .where(eq(bookmarkTags.bookmarkId, bookmarkId));
+  await getDb().delete(bookmarkTags).where(eq(bookmarkTags.bookmarkId, bookmarkId));
 
-  await db
-    .delete(bookmarks)
-    .where(and(eq(bookmarks.id, bookmarkId), eq(bookmarks.userId, user.id)));
+  await getDb().delete(bookmarks).where(and(eq(bookmarks.id, bookmarkId), eq(bookmarks.userId, user.id)));
 
   revalidatePath("/");
   revalidatePath("/archive");
@@ -89,18 +78,18 @@ export async function updateTags(bookmarkId: number, tagNames: string[]) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
 
-  await db.delete(bookmarkTags).where(eq(bookmarkTags.bookmarkId, bookmarkId));
+  await getDb().delete(bookmarkTags).where(eq(bookmarkTags.bookmarkId, bookmarkId));
 
   for (const name of tagNames) {
     const trimmed = name.trim().toLowerCase();
     if (!trimmed) continue;
-    const existing = await db.select().from(tags).where(eq(tags.name, trimmed));
+    const existing = await getDb().select().from(tags).where(eq(tags.name, trimmed));
     let tag = existing[0];
     if (!tag) {
-      const insertedTag = await db.insert(tags).values({ name: trimmed }).returning({ id: tags.id, name: tags.name });
+      const insertedTag = await getDb().insert(tags).values({ name: trimmed }).returning({ id: tags.id, name: tags.name });
       tag = insertedTag[0];
     }
-    await db.insert(bookmarkTags).values({ bookmarkId, tagId: tag.id });
+    await getDb().insert(bookmarkTags).values({ bookmarkId, tagId: tag.id });
   }
 
   revalidatePath("/");
@@ -122,33 +111,44 @@ export interface BookmarkWithTags {
 }
 
 export async function getBookmarks(archived: boolean = false): Promise<BookmarkWithTags[]> {
-  const user = await getCurrentUser();
-  if (!user) return [];
+  let userId: number;
+  try {
+    const user = await getCurrentUser();
+    if (!user) return [];
+    userId = user.id;
+  } catch {
+    return [];
+  }
 
-  const rows = await db
-    .select()
-    .from(bookmarks)
-    .where(and(eq(bookmarks.userId, user.id), eq(bookmarks.archived, archived)))
-    .orderBy(desc(bookmarks.createdAt));
+  let rows: any[];
+  try {
+    rows = await getDb().select().from(bookmarks)
+      .where(and(eq(bookmarks.userId, userId), eq(bookmarks.archived, archived)))
+      .orderBy(desc(bookmarks.createdAt));
+  } catch {
+    return [];
+  }
 
   const bookmarkIds = rows.map((b) => b.id);
   let tagMap = new Map<number, { id: number; name: string }[]>();
 
   if (bookmarkIds.length > 0) {
-    const btRows = await db
-      .select({
+    try {
+      const btRows = await getDb().select({
         bookmarkId: bookmarkTags.bookmarkId,
         tagId: bookmarkTags.tagId,
         tagName: tags.name,
-      })
-      .from(bookmarkTags)
-      .innerJoin(tags, eq(bookmarkTags.tagId, tags.id))
-      .where(inArray(bookmarkTags.bookmarkId, bookmarkIds));
+      }).from(bookmarkTags)
+        .innerJoin(tags, eq(bookmarkTags.tagId, tags.id))
+        .where(inArray(bookmarkTags.bookmarkId, bookmarkIds));
 
-    for (const bt of btRows) {
-      const existing = tagMap.get(bt.bookmarkId) ?? [];
-      existing.push({ id: bt.tagId, name: bt.tagName });
-      tagMap.set(bt.bookmarkId, existing);
+      for (const bt of btRows) {
+        const existing = tagMap.get(bt.bookmarkId) ?? [];
+        existing.push({ id: bt.tagId, name: bt.tagName });
+        tagMap.set(bt.bookmarkId, existing);
+      }
+    } catch {
+      // tags failed to load, return bookmarks without tags
     }
   }
 
@@ -159,24 +159,30 @@ export async function getBookmarks(archived: boolean = false): Promise<BookmarkW
 }
 
 export async function getAllTags() {
-  const user = await getCurrentUser();
-  if (!user) return [];
+  let userId: number;
+  try {
+    const user = await getCurrentUser();
+    if (!user) return [];
+    userId = user.id;
+  } catch {
+    return [];
+  }
 
-  const userBookmarkIds = await db
-    .select({ id: bookmarks.id })
-    .from(bookmarks)
-    .where(eq(bookmarks.userId, user.id));
+  const userBookmarkIds = await getDb().select({ id: bookmarks.id }).from(bookmarks)
+    .where(eq(bookmarks.userId, userId));
 
   const ids = userBookmarkIds.map((b) => b.id);
   if (ids.length === 0) return [];
 
-  const btRows = await db
-    .select()
-    .from(bookmarkTags)
+  const btRows = await getDb().select().from(bookmarkTags)
     .where(inArray(bookmarkTags.bookmarkId, ids));
 
   const tagIds = [...new Set(btRows.map((bt) => bt.tagId))];
   if (tagIds.length === 0) return [];
 
-  return db.select().from(tags).where(inArray(tags.id, tagIds));
+  try {
+    return await getDb().select().from(tags).where(inArray(tags.id, tagIds));
+  } catch {
+    return [];
+  }
 }

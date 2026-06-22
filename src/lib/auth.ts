@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { compare, hash } from "bcryptjs";
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { users, sessions } from "@/db/schema";
 
 const SESSION_COOKIE = "session_token";
@@ -24,7 +24,7 @@ export async function verifyPassword(password: string, hashStr: string): Promise
 export async function createSession(userId: number): Promise<string> {
   const token = generateToken();
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-  await db.insert(sessions).values({ id: token, userId, expiresAt });
+  await getDb().insert(sessions).values({ id: token, userId, expiresAt });
   return token;
 }
 
@@ -49,7 +49,7 @@ export async function getCurrentUser() {
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const rows = await db
+  const rows = await getDb()
     .select({
       id: users.id,
       email: users.email,
@@ -68,13 +68,13 @@ export async function getCurrentUser() {
 
 export async function registerUser(email: string, name: string, password: string) {
   const passwordHash = await hashPassword(password);
-  const id = await db.insert(users).values({ email, name, passwordHash }).returning({ id: users.id });
+  const id = await getDb().insert(users).values({ email, name, passwordHash }).returning({ id: users.id });
   if (id.length === 0) throw new Error("Failed to create user");
   return { id: id[0].id, email, name };
 }
 
 export async function loginUser(email: string, password: string) {
-  const rows = await db.select().from(users).where(eq(users.email, email));
+  const rows = await getDb().select().from(users).where(eq(users.email, email));
   const user = rows[0];
   if (!user) return null;
   const valid = await verifyPassword(password, user.passwordHash);
