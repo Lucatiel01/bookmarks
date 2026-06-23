@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { logout } from "@/actions/auth";
 
 interface SidebarProps {
   tags: { id: number; name: string }[];
@@ -116,6 +117,19 @@ export function Sidebar({ tags, activeTag, onTagClick, onAddClick, onClose }: Si
 
       {/* Spacer */}
       <div className="mt-auto" />
+
+      {/* Logout */}
+      <form action={logout}>
+        <button
+          type="submit"
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+        >
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Sign out
+        </button>
+      </form>
 
       {/* Theme toggle */}
       {mounted && (
