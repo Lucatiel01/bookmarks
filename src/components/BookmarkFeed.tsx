@@ -8,9 +8,11 @@ import type { BookmarkWithTags } from "@/actions/bookmarks";
 export function BookmarkFeed({
   bookmarks,
   onTagClick,
+  onMenuClick,
 }: {
   bookmarks: BookmarkWithTags[];
   onTagClick: (tag: string) => void;
+  onMenuClick: () => void;
 }) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -28,11 +30,21 @@ export function BookmarkFeed({
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 px-8 py-4 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-950/80">
-        <SearchBar value={searchQuery} onChange={setSearchQuery} />
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200 bg-white/80 px-4 py-3 backdrop-blur-xl md:px-8 md:py-4 dark:border-zinc-800 dark:bg-zinc-950/80">
+        <button
+          onClick={onMenuClick}
+          className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-800"
+        >
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <div className="flex-1">
+          <SearchBar value={searchQuery} onChange={setSearchQuery} />
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6">
+      <div className="flex-1 overflow-y-auto px-4 py-6 md:px-8">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center pt-24 text-center">
             <svg className="h-12 w-12 text-zinc-300 dark:text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -42,7 +54,7 @@ export function BookmarkFeed({
             <p className="mt-1 text-sm text-zinc-400 dark:text-zinc-500">Save your first link to get started.</p>
           </div>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((bookmark) => (
               <BookmarkCard
                 key={bookmark.id}

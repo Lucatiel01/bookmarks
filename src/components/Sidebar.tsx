@@ -10,9 +10,10 @@ interface SidebarProps {
   activeTag: string | null;
   onTagClick: (tag: string | null) => void;
   onAddClick: () => void;
+  onClose: () => void;
 }
 
-export function Sidebar({ tags, activeTag, onTagClick, onAddClick }: SidebarProps) {
+export function Sidebar({ tags, activeTag, onTagClick, onAddClick, onClose }: SidebarProps) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -21,6 +22,12 @@ export function Sidebar({ tags, activeTag, onTagClick, onAddClick }: SidebarProp
 
   return (
     <aside className="flex h-full w-64 flex-col border-r border-zinc-200 bg-white px-4 py-6 dark:border-zinc-800 dark:bg-zinc-950">
+      {/* Close button (mobile) */}
+      <button onClick={onClose} className="mb-2 self-end rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 md:hidden dark:hover:bg-zinc-800 dark:hover:text-zinc-300">
+        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2 px-2">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600">
