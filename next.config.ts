@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "**" },
     ],
   },
+  webpack: (config) => config,
 };
 
 export default nextConfig;
